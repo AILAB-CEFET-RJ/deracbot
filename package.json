@@ -1,0 +1,20 @@
+{
+  "name": "botderac",
+  "version": "1.0.0",
+  "description": "Backend code to integrate DialogFlow with FireBase databases HTTPS API.",
+  "main": "build/index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@types/dialogflow-fulfillment": "^0.6.1",
+    "dialogflow-fulfillment": "^0.5.0",
+    "firebase-functions": "^4.2.1"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "typescript": "^5.0.4"
+  }
+}
