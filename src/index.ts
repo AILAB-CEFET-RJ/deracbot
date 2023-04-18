@@ -5,8 +5,15 @@
 import { https, Request, Response } from 'firebase-functions';
 import { WebhookClient } from 'dialogflow-fulfillment';
 import { Card, Suggestion } from 'dialogflow-fulfillment';
+import firebaseAdmin = require("firebase-admin");
+import { DataSnapshot } from 'firebase-admin/database';
 
 process.env.DEBUG = 'dialogflow:debug'; // enables lib debugging statements
+
+firebaseAdmin.initializeApp({
+  credential: firebaseAdmin.credential.applicationDefault(),
+  databaseURL: 'https://deracbot-9da9f-default-rtdb.firebaseio.com/'
+});
 
 exports.dialogflowFirebaseFulfillment = https.onRequest((request: Request, response: Response) => {
   const _agent = new WebhookClient({ request: request, response: response });
@@ -14,8 +21,13 @@ exports.dialogflowFirebaseFulfillment = https.onRequest((request: Request, respo
   console.log('Dialogflow Request body: ' + JSON.stringify(request.body));
 
   function GetStatusIsencao(agent: WebhookClient) {
-    agent.add(`Webhook code: I didn't understand`);
-    agent.add(`Webhook code: I'm sorry, can you try again?`);
+    var matricula = agent.parameters.matricula;
+    return firebaseAdmin.database().ref('matricula').once("value").then((snapshot: DataSnapshot) => {
+      var isencaoStatus = snapshot.val();
+      agent.add("Status da sua isencao: " + isencaoStatus);
+    });
+    // agent.add("Webhook code: I didn't understand");
+    // agent.add("Webhook code: I'm sorry, can you try again?");
   }
 
   function NovaIsencao(agent: WebhookClient) {
@@ -44,6 +56,7 @@ exports.dialogflowFirebaseFulfillment = https.onRequest((request: Request, respo
   let intentMap = new Map();
   intentMap.set("GetStatusIsencao", GetStatusIsencao);
   intentMap.set("NovaIsencao", NovaIsencao);
+  intentMap.set("fetchTest", GetStatusIsencao);
   // intentMap.set('your intent name here', yourFunctionHandler);
   _agent.handleRequest(intentMap);
 });

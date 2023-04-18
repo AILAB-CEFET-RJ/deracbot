@@ -10,6 +10,7 @@
   "dependencies": {
     "@types/dialogflow-fulfillment": "^0.6.1",
     "dialogflow-fulfillment": "^0.5.0",
+    "firebase-admin": "^11.6.0",
     "firebase-functions": "^4.2.1"
   },
   "author": "",
