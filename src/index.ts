@@ -3,35 +3,77 @@
 'use strict';
 
 import { https, Request, Response } from 'firebase-functions';
+import functions = require('firebase-functions');
 import { WebhookClient } from 'dialogflow-fulfillment';
 import { Card, Suggestion } from 'dialogflow-fulfillment';
 import firebaseAdmin = require("firebase-admin");
 import { DataSnapshot } from 'firebase-admin/database';
+// import firebase = require("firebase/app");
 
 process.env.DEBUG = 'dialogflow:debug'; // enables lib debugging statements
 
-firebaseAdmin.initializeApp({
-  credential: firebaseAdmin.credential.applicationDefault(),
-  databaseURL: 'https://deracbot-9da9f-default-rtdb.firebaseio.com/'
-});
+// export const environment = {
+//   production: false,
+//   firebaseConfig: {
+//     apiKey: "AIzaSyADzMHtzGeCd7Bjk1ME8ahn3N95yL5z5iQ",
+//     authDomain: "deracbot-9da9f.firebaseapp.com",
+//     databaseURL: "https://deracbot-9da9f-default-rtdb.firebaseio.com",
+//     projectId: "deracbot-9da9f",
+//     storageBucket: "deracbot-9da9f.appspot.com",
+//     messagingSenderId: "327411191935",
+//     appId: "1:327411191935:web:ec0e9b463bcbc42ff0af4a"
+//   }
+// };
+
+// let serviceAccount = require("../../test-project-key.json");
+// import params = require('firebase-functions/params');
+
+
+const app = firebaseAdmin.initializeApp(functions.config().firebase);
+// firebaseAdmin.initializeApp({
+//   credential: firebaseAdmin.credential.cert({
+//     projectId: params.projectID,
+//     clientEmail: params.c,
+//     privateKey: params.privateKey
+//   }),
+//   databaseURL: "https://deracbot-9da9f-default-rtdb.firebaseio.com/",
+//   projectId: params.projectID.value
+// });
+
+const db = firebaseAdmin.firestore();
 
 exports.dialogflowFirebaseFulfillment = https.onRequest((request: Request, response: Response) => {
   const _agent = new WebhookClient({ request: request, response: response });
+  // const fs = firebaseAdmin.firestore();
+  // const db = firebaseAdmin.database();
+
   console.log('Dialogflow Request headers: ' + JSON.stringify(request.headers));
   console.log('Dialogflow Request body: ' + JSON.stringify(request.body));
+  console.log('functions.config().firebase: ' + JSON.stringify(functions.config().firebase));
+  console.log('functions.config().firebase: ' + JSON.stringify(app));
 
   function GetStatusIsencao(agent: WebhookClient) {
+    console.log('Rodando GetStatusIsencao');
     var matricula = agent.parameters.matricula;
-    return firebaseAdmin.database().ref('matricula').once("value").then((snapshot: DataSnapshot) => {
-      var isencaoStatus = snapshot.val();
-      agent.add("Status da sua isencao: " + isencaoStatus);
+    return firebaseAdmin.database(app).ref("matricula").once("value").then((snapshot: DataSnapshot) => {
+      // var isencaoStatus = snapshot.val();
+      // agent.add("Status da sua isencao: " + isencaoStatus);
     });
     // agent.add("Webhook code: I didn't understand");
     // agent.add("Webhook code: I'm sorry, can you try again?");
   }
 
   function NovaIsencao(agent: WebhookClient) {
-    agent.add(`Webhook code: Welcome to my agent!`);
+    console.log('NovaIsencao');
+    // agent.add("Webhook code: Welcome to my agent!");
+    return firebaseAdmin.database(app).ref("teste").once("value").then(
+      (snapshot: DataSnapshot) => {
+        console.log('NovaIsencao: SUCESSO: ' + JSON.stringify(snapshot));
+      },
+      (reason: any) => {
+        console.log('NovaIsencao: FALHA: ' + JSON.stringify(reason));
+      }
+    )
   }
 
   // // Uncomment and edit to make your own intent handler
