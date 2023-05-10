@@ -4,6 +4,7 @@ import { Request } from "firebase-functions/lib/common/providers/https";
 import { Response } from "firebase-functions/lib/v1";
 
 // The Firebase Admin SDK to access Firestore.
+import { Firestore } from "firebase-admin/firestore";
 import * as admin from "firebase-admin";
 admin.initializeApp();
 
@@ -11,44 +12,74 @@ admin.initializeApp();
 import { WebhookClient } from 'dialogflow-fulfillment';
 import { DocumentData, QuerySnapshot } from "firebase-admin/firestore";
 
+
+// Enumeration
+// type StatusIsencao =
+//     | "DEFERIDO"
+//     | "INDEFERIDO"
+//     | "ABERTO";
+
+
 // Long type name aliases
 type FirestoreCountQuerySnapshot = FirebaseFirestore.AggregateQuerySnapshot<{ count: FirebaseFirestore.AggregateField<number> }>;
-type IntentHandlerFunction = (agent: WebhookClient) => void;
+type IntentHandlerFunction = (agent: WebhookClient) => void | Promise<void>;
 
-exports.dialogflowFirebaseFulfillment = functions.https.onRequest((request: Request, response: Response<any>) => {
-    const _agent = new WebhookClient({ request: request, response: response });
+
+// Auxliar function
+function logDefered(text: String): void {
+    setTimeout(() => {
+        console.log(text);
+    }, 1000);
+}
+
+function onRejected(reason: any): void {
+    logDefered(`REJECTED! ${reason}`);
+}
+
+function onCatch(reason: any): void {
+    logDefered(`EXCEPTION! ${reason}`);
+}
+
+
+// Main code
+exports.dialogflowFirebaseFulfillment = functions.https.onRequest((request: Request, response: Response<any>): void => {
+    const _agent: WebhookClient = new WebhookClient({ request: request, response: response });
 
     // Reference: https://googleapis.dev/nodejs/firestore/latest/Firestore.html
-    const firestore = admin.firestore();
+    const firestore: Firestore = admin.firestore();
 
-    function IniciarChat(agent: WebhookClient) {
+    function IniciarChat(agent: WebhookClient): Promise<void> {
+        logDefered('Running IniciarChat');
         // Reference: https://groups.google.com/g/dialogflow-cx-edition-users/c/jajSEPqhYZE?pli=1
-        // Workaround avoid timeout/health check
+        // Workaround avoid timeout and also works as health check
 
         // Reference: https://googleapis.dev/nodejs/firestore/latest/CollectionReference.html#select-examples
         return firestore.collection('CURSO')
             .count()
             .get()
-            .then((res: FirestoreCountQuerySnapshot) => {
+            .then((res: FirestoreCountQuerySnapshot): void => {
+                //agent.add("");
+                agent.add("UHUL UHUL UHUL");
                 agent.add("Olá! Voce quer pedir isenção de uma materia ou conferir o status de um pedido já aberto?");
-            });
+                return;
+
+            }, onRejected
+            ).catch(onCatch);
     }
 
-    function GetStatusIsencao(agent: WebhookClient) {
+    function GetStatusIsencao(agent: WebhookClient): Promise<void> {
         const matricula = agent.parameters.matricula;
-        setTimeout(() => {
-            console.log('Rodando GetStatusIsencao');
-        }, 0);
+        logDefered('Running GetStatusIsencao');
 
-        // Reference: https://googleapis.dev/nodejs/firestore/latest/CollectionReference.html#select-examples
         return firestore.collection('REQUISICAO')
+            .where("MATRICULA", "!=", "MATRICULA_MOCK")
             .where("MATRICULA", "==", matricula)
             .select("DATA_CADASTRO", "SITUACAO")
             .orderBy("DATA_CADASTRO", "desc")
             .limit(1)
             .select("SITUACAO")
             .get()
-            .then((res: QuerySnapshot<DocumentData>) => {
+            .then((res: QuerySnapshot<DocumentData>): void => {
                 var resposta = "";
                 if (res.size == 0) {
                     resposta = `Nenhum pedido de isenção encontrado para ${matricula}.`;
@@ -57,27 +88,107 @@ exports.dialogflowFirebaseFulfillment = functions.https.onRequest((request: Requ
                     resposta = `O status ${ultimo} pedido de isenção de ${matricula} é: ${res.docs[0].get("SITUACAO")}.`;
                 }
 
-                agent.add("UHUL");
                 agent.add(resposta);
-                agent.add("WOW");
-                setTimeout(() => {
-                    console.log(resposta);
-                }, 0);
-            });
+                logDefered(resposta);
+                return;
+
+            }, onRejected
+            ).catch(onCatch);
     }
 
-    // function NovaIsencao(agent: WebhookClient) {
-    //     console.log('NovaIsencao');
-    //     // agent.add("Webhook code: Welcome to my agent!");
-    //     return admin.database().ref("teste").once("value").then(
-    //         (snapshot: DataSnapshot) => {
-    //             console.log('NovaIsencao: SUCESSO: ' + JSON.stringify(snapshot));
-    //         },
-    //         (reason: any) => {
-    //             console.log('NovaIsencao: FALHA: ' + JSON.stringify(reason));
-    //         }
-    //     )
-    // }
+    function NovaIsencao(agent: WebhookClient): Promise<void> {
+        logDefered('Running NovaIsencao');
+
+        // Auxiliar variables
+        const matricula: string = agent.parameters.matricula;
+        const id_curso: string = agent.parameters.id_curso;
+
+        // Conferir se a matrícula foi inserida
+        logDefered(`matricula: '${matricula}'`);
+        if (!matricula) {
+            return new Promise<void>((): void => { });
+        }
+
+        // Conferir se a matrícula inserida tem alguma requisicao aberta
+        return firestore.collection('REQUISICAO')
+            .where("MATRICULA", "!=", "MATRICULA_MOCK")
+            .where("MATRICULA", "==", matricula)
+            .where("SITUACAO", "==", "ABERTO")
+            .orderBy("DATA_CADASTRO", "asc")
+            .limit(1)
+            .select("DATA_CADASTRO")
+            .get()
+            .then((res: QuerySnapshot<DocumentData>): void | Promise<void> => {
+                var resposta = "";
+
+                // A matrícula inserida tem uma requisicao aberta
+                if (res.size > 0) {
+                    const dataRequisicao = res.docs[0].get("DATA_CADASTRO")
+                    resposta = `A matrícula ${matricula} possui uma solicitação ABERTA realizada na data ${dataRequisicao}.`;
+
+                    agent.add(resposta);
+                    logDefered(resposta);
+                    return;
+                }
+
+                // Função para listar todos os cursos disponíveis
+                let listCourses = (): Promise<void> => {
+                    return firestore.collection('CURSO')
+                        .where("ID_CURSO", "!=", "CURSO_MOCK")
+                        .select("ID_CURSO", "NOME")
+                        .orderBy("ID_CURSO", "asc")
+                        .get()
+                        .then((res: QuerySnapshot<DocumentData>): void => {
+                            var resposta = "";
+                            if (res.size == 0) {
+                                resposta = `Nenhum curso cadastrado. Entre em contato com o DERAC.`;
+                            } else {
+                                for (let i = 0; i != res.size; ++i) {
+                                    resposta += `${res.docs[i].get("ID_CURSO")} - ${res.docs[i].get("NOME")}\n`;
+                                }
+                            }
+
+                            agent.add(resposta);
+                            logDefered(resposta);
+                            return;
+
+                        }, onRejected
+                        ).catch(onCatch);
+                }
+
+                // Não preencheu curso ainda: dá opções de cursos
+                logDefered(`id_curso: '${id_curso}'`);
+                if (!id_curso) {
+                    return listCourses();
+                }
+
+                // Preencheu curso corretamente?
+                return firestore.collection('CURSO')
+                    .where("ID_CURSO", "!=", "CURSO_MOCK")
+                    .where("ID_CURSO", "==", id_curso)
+                    .select("ID_CURSO", "NOME")
+                    .get()
+                    .then((res: QuerySnapshot<DocumentData>): void | Promise<void> => {
+                        var resposta = "";
+
+                        // Não preencheu curso corretamente
+                        if (res.size == 0) {
+                            return listCourses();
+                        }
+
+                        // Preencheu curso corretamente!
+                        resposta = `Preencheu curso corretamente! TODO.`;
+
+                        agent.add(resposta);
+                        logDefered(resposta);
+                        return;
+
+                    }, onRejected
+                    ).catch(onCatch);
+
+            }, onRejected
+            ).catch(onCatch);
+    }
 
     // // Uncomment and edit to make your own intent handler
     // // uncomment `intentMap.set('your intent name here', yourFunctionHandler);`
@@ -97,14 +208,19 @@ exports.dialogflowFirebaseFulfillment = functions.https.onRequest((request: Requ
     //   agent.setContext({ name: 'weather', lifespan: 2, parameters: { city: 'Rome' }});
     // }
 
+    function PopularBD(agent: WebhookClient): void {
+        agent.add("Whebhook say: TODO");
+    }
+
     // Run the proper function handler based on the matched Dialogflow intent name
     let intentMap = new Map<string, IntentHandlerFunction>();
     intentMap.set("IniciarChat", IniciarChat);
     intentMap.set("GetStatusIsencao", GetStatusIsencao);
-    // intentMap.set("NovaIsencao", NovaIsencao);
+    intentMap.set("NovaIsencao", NovaIsencao);
+    intentMap.set("PopularBD", PopularBD);
     // intentMap.set("fetchTest", GetStatusIsencao);
-    // intentMap.set('your intent name here', yourFunctionHandler);
-    _agent.handleRequest(intentMap);
+    // intentMap.set('your intent name here', yourFunctionHandler); 
+    _agent.handleRequest(intentMap).catch(onCatch);
 });
 
 
