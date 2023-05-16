@@ -49,146 +49,138 @@ exports.dialogflowFirebaseFulfillment = functions.https.onRequest((request: Requ
 
     // Reference: https://googleapis.dev/nodejs/firestore/latest/Firestore.html
     const firestore: Firestore = admin.firestore();
+    logDefered("Chamou. Body: " + request.rawBody.toString("utf-8"));
 
-    function IniciarChat(agent: WebhookClient): Promise<void> {
+    async function IniciarChat(agent: WebhookClient): Promise<void> {
         logDefered("Running IniciarChat");
         // Reference: https://groups.google.com/g/dialogflow-cx-edition-users/c/jajSEPqhYZE?pli=1
         // Workaround avoid timeout and also works as health check
 
         // Reference: https://googleapis.dev/nodejs/firestore/latest/CollectionReference.html#select-examples
-        return firestore.collection("CURSO")
-            .count()
-            .get()
-            .then((res: FirestoreCountQuerySnapshot): void => {
-                agent.add("Olá! Voce quer pedir isenção de uma materia ou conferir o status de um pedido já aberto?");
-                return;
-
-            }, onRejected
-            ).catch(onCatch);
+        try {
+            await firestore.collection("CURSO").count().get();
+            agent.add("Olá! Voce quer pedir isenção de uma materia ou conferir o status de um pedido já aberto?");
+        } catch (e) {
+            onCatch(e);
+        }
     }
 
-    function GetStatusIsencao(agent: WebhookClient): Promise<void> {
+    async function GetStatusIsencao(agent: WebhookClient): Promise<void> {
         const matricula = agent.parameters.matricula;
         logDefered("Running GetStatusIsencao");
 
-        return firestore.collection("REQUISICAO")
-            .where("MATRICULA", "!=", "MATRICULA_MOCK")
-            .where("MATRICULA", "==", matricula)
-            .select("DATA_CADASTRO", "SITUACAO")
-            .orderBy("DATA_CADASTRO", "desc")
-            .limit(1)
-            .select("SITUACAO")
-            .get()
-            .then((res: QuerySnapshot<DocumentData>): void => {
-                var resposta = "";
-                if (res.size == 0) {
-                    resposta = `Nenhum pedido de isenção encontrado para ${matricula}.`;
-                } else {
-                    const ultimo = res.size == 1 ? "do" : "do último";
-                    resposta = `O status ${ultimo} pedido de isenção de ${matricula} é: ${res.docs[0].get("SITUACAO")}.`;
-                }
+        try {
+            const res: QuerySnapshot<DocumentData> = await firestore.collection("REQUISICAO")
+                .where("MATRICULA", "!=", "MATRICULA_MOCK")
+                .where("MATRICULA", "==", matricula)
+                .select("DATA_CADASTRO", "SITUACAO")
+                .orderBy("DATA_CADASTRO", "desc")
+                .limit(1)
+                .select("SITUACAO")
+                .get();
 
-                agent.add(resposta);
-                logDefered(resposta);
-                return;
+            let resposta = "";
+            if (res.size == 0) {
+                resposta = `Nenhum pedido de isenção encontrado para ${matricula}.`;
+            } else {
+                const ultimo = res.size == 1 ? "do" : "do último";
+                resposta = `O status ${ultimo} pedido de isenção de ${matricula} é: ${res.docs[0].get("SITUACAO")}.`;
+            }
 
-            }, onRejected
-            ).catch(onCatch);
+            agent.add(resposta);
+            logDefered(resposta);
+        } catch (e) {
+            onCatch(e);
+        }
     }
 
-    function NovaIsencao(agent: WebhookClient): Promise<void> {
+    async function NovaIsencao(agent: WebhookClient): Promise<void> {
         logDefered("Running NovaIsencao");
 
-        // Auxiliar variables
+        // Auxiliar letiables
         const matricula: string = agent.parameters.matricula;
         const id_curso: string = agent.parameters.id_curso;
 
         // Conferir se a matrícula foi inserida
         logDefered(`matricula: '${matricula}'`);
         if (!matricula) {
-            return emptyPromise();
+            return;
         }
 
         // Conferir se a matrícula inserida tem alguma requisicao aberta
-        return firestore.collection("REQUISICAO")
-            .where("MATRICULA", "!=", "MATRICULA_MOCK")
-            .where("MATRICULA", "==", matricula)
-            .where("SITUACAO", "==", "ABERTO")
-            .orderBy("DATA_CADASTRO", "asc")
-            .limit(1)
-            .select("DATA_CADASTRO")
-            .get()
-            .then((res: QuerySnapshot<DocumentData>): void | Promise<void> => {
-                var resposta = "";
+        try {
+            const res: QuerySnapshot<DocumentData> = await firestore.collection("REQUISICAO")
+                .where("MATRICULA", "!=", "MATRICULA_MOCK")
+                .where("MATRICULA", "==", matricula)
+                .where("SITUACAO", "==", "ABERTO")
+                .orderBy("DATA_CADASTRO", "asc")
+                .limit(1)
+                .select("DATA_CADASTRO")
+                .get();
 
-                // A matrícula inserida tem uma requisicao aberta
-                if (res.size > 0) {
-                    const dataRequisicao = res.docs[0].get("DATA_CADASTRO")
-                    resposta = `A matrícula ${matricula} possui uma solicitação ABERTA realizada na data ${dataRequisicao}.`;
+            // A matrícula inserida tem uma requisicao aberta
+            let resposta = "";
+            if (res.size > 0) {
+                const dataRequisicao = res.docs[0].get("DATA_CADASTRO")
+                resposta = `A matrícula ${matricula} possui uma solicitação ABERTA realizada na data ${dataRequisicao}.`;
 
-                    agent.add(resposta);
-                    logDefered(resposta);
-                    return;
-                }
+                agent.add(resposta);
+                logDefered(resposta);
+                return;
+            }
 
-                // Função para listar todos os cursos disponíveis
-                let listCourses = (): Promise<void> => {
-                    return firestore.collection("CURSO")
-                        .where("ID_CURSO", "!=", "CURSO_MOCK")
-                        .select("ID_CURSO", "NOME")
-                        .orderBy("ID_CURSO", "asc")
-                        .get()
-                        .then((res: QuerySnapshot<DocumentData>): void => {
-                            var resposta = "";
-                            if (res.size == 0) {
-                                resposta = `Nenhum curso cadastrado. Entre em contato com o DERAC.`;
-                            } else {
-                                for (let i = 0; i != res.size; ++i) {
-                                    resposta += `${res.docs[i].get("ID_CURSO")} - ${res.docs[i].get("NOME")}\n`;
-                                }
-                            }
-
-                            agent.add(resposta);
-                            logDefered(resposta);
-                            return;
-
-                        }, onRejected
-                        ).catch(onCatch);
-                }
-
-                // Não preencheu curso ainda: dá opções de cursos
-                logDefered(`id_curso: '${id_curso}'`);
-                if (!id_curso) {
-                    return listCourses();
-                }
-
-                // Preencheu curso corretamente?
-                return firestore.collection("CURSO")
+            // Função para listar todos os cursos disponíveis
+            let listCourses = async (): Promise<void> => {
+                const res: QuerySnapshot<DocumentData> = await firestore.collection("CURSO")
                     .where("ID_CURSO", "!=", "CURSO_MOCK")
-                    .where("ID_CURSO", "==", id_curso)
                     .select("ID_CURSO", "NOME")
-                    .get()
-                    .then((res: QuerySnapshot<DocumentData>): void | Promise<void> => {
-                        var resposta = "";
+                    .orderBy("ID_CURSO", "asc")
+                    .get();
 
-                        // Não preencheu curso corretamente
-                        if (res.size == 0) {
-                            return listCourses();
-                        }
+                let resposta = "";
+                if (res.size == 0) {
+                    resposta = `Nenhum curso cadastrado. Entre em contato com o DERAC.`;
+                } else {
+                    for (let i = 0; i != res.size; ++i) {
+                        resposta += `${res.docs[i].get("ID_CURSO")} - ${res.docs[i].get("NOME")}\n`;
+                    }
+                }
 
-                        // Preencheu curso corretamente!
-                        resposta = `Preencheu curso corretamente! TODO.`;
+                agent.add(resposta);
+                logDefered(resposta);
+                return;
+            }
 
-                        agent.add(resposta);
-                        logDefered(resposta);
-                        return;
+            // Não preencheu curso ainda: dá opções de cursos
+            logDefered(`id_curso: '${id_curso}'`);
+            if (!id_curso) {
+                return listCourses();
+            }
 
-                    }, onRejected
-                    ).catch(onCatch);
+            // Preencheu curso corretamente?
+            const res2: QuerySnapshot<DocumentData> = await firestore.collection("CURSO")
+                .where("ID_CURSO", "!=", "CURSO_MOCK")
+                .where("ID_CURSO", "==", id_curso)
+                .select("ID_CURSO", "NOME")
+                .get();
 
-            }, onRejected
-            ).catch(onCatch);
+            // Não preencheu curso corretamente
+            if (res2.size == 0) {
+                return listCourses();
+            }
+
+            // Preencheu curso corretamente!
+            resposta = `Preencheu curso corretamente! TODO.`;
+
+            agent.add(resposta);
+            logDefered(resposta);
+            return;
+
+        } catch (e) {
+            onCatch(e);
+        }
     }
+
 
     // // Uncomment and edit to make your own intent handler
     // // uncomment `intentMap.set("your intent name here", yourFunctionHandler);`
@@ -217,8 +209,8 @@ exports.dialogflowFirebaseFulfillment = functions.https.onRequest((request: Requ
         // CLEAN: REQUISICAO
 
         const fsBatch: WriteBatch = firestore.batch();
-        var countResult: FirestoreCountQuerySnapshot;
-        var hasSchedule: boolean = false;
+        let countResult: FirestoreCountQuerySnapshot;
+        let hasSchedule: boolean = false;
 
         try {
             countResult = await firestore.collection("ALUNO").where("MATRICULA", "==", "MATRICULA_MOCK").count().get();
