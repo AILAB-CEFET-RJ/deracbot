@@ -70,6 +70,8 @@ node --version
 npm --version
 ```
 
+[Here](https://nodejs.org/en/download/releases) are some Node.js + NPM pair version.
+
 ## Running
 
 To start all, build the scrip, then run the emulators:
