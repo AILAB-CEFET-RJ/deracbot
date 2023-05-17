@@ -31,16 +31,8 @@ function logDefered(text: String): void {
     }, 1000);
 }
 
-function onRejected(reason: any): void {
-    logDefered(`REJECTED! ${reason}`);
-}
-
 function onCatch(reason: any): void {
     logDefered(`EXCEPTION! ${reason}`);
-}
-
-function emptyPromise(): Promise<void> {
-    return new Promise<void>((): void => { })
 }
 
 // Main code
