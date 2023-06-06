@@ -11,6 +11,14 @@ admin.initializeApp();
 import { WebhookClient } from 'dialogflow-fulfillment';
 import { DocumentData, QuerySnapshot, Firestore, WriteBatch, QueryDocumentSnapshot } from "firebase-admin/firestore";
 
+
+// Enumeration
+type StatusIsencao =
+    | "DEFERIDO"
+    | "INDEFERIDO"
+    | "ABERTO";
+
+
 // Types
 interface AgentContext {
     name: string;
@@ -19,8 +27,8 @@ interface AgentContext {
 }
 
 interface AlunoDto {
-    ID_CURSO: string,
     MATRICULA: string,
+    ID_CURSO: string,
     NOME_COMPLETO: string
 }
 
@@ -30,25 +38,19 @@ interface CursoDto {
 }
 
 interface DisciplinaDto {
-    CARGA_HORARIA: number,
-    ID_CURSO: string,
     ID_DISCIPLINA: string,
+    ID_CURSO: string,
+    CARGA_HORARIA: number,
     NOME: string
 }
 
 interface RequisicaoDto {
+    MATRICULA: string,
     DATA_CADASTRO: Date,
     ESTRUTURA_CURRICULAR: string,
-    MATRICULA: string,
-    SITUACAO: string
+    ID_DISCIPLINAS: Array<string>,
+    SITUACAO: StatusIsencao
 }
-
-
-// Enumeration
-// type StatusIsencao =
-//     | "DEFERIDO"
-//     | "INDEFERIDO"
-//     | "ABERTO";
 
 
 // Long type name aliases
@@ -312,8 +314,8 @@ exports.dialogflowFirebaseFulfillment = functions.https.onRequest((request: Requ
 
                 // Mocked placeholder
                 const mockedAluno: AlunoDto = {
-                    ID_CURSO: "CURSO_MOCK",
                     MATRICULA: "MATRICULA_MOCK",
+                    ID_CURSO: "CURSO_MOCK",
                     NOME_COMPLETO: "MOCK"
                 }
 
@@ -375,9 +377,9 @@ exports.dialogflowFirebaseFulfillment = functions.https.onRequest((request: Requ
 
                 // Mocked placeholder
                 const mockedDisciplina: DisciplinaDto = {
-                    CARGA_HORARIA: 0,
-                    ID_CURSO: "CURSO_MOCK",
                     ID_DISCIPLINA: "DISCIPLINA_MOCK",
+                    ID_CURSO: "CURSO_MOCK",
+                    CARGA_HORARIA: 0,
                     NOME: "MOCK"
                 }
 
@@ -410,9 +412,10 @@ exports.dialogflowFirebaseFulfillment = functions.https.onRequest((request: Requ
 
                 // Mocked placeholder
                 const mockedRequisicao: RequisicaoDto = {
+                    MATRICULA: "MATRICULA_MOCK",
                     DATA_CADASTRO: new Date(),
                     ESTRUTURA_CURRICULAR: "",
-                    MATRICULA: "MATRICULA_MOCK",
+                    ID_DISCIPLINAS: [],
                     SITUACAO: "ABERTO"
                 }
 
